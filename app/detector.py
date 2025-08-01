@@ -1,67 +1,103 @@
 import cv2
 import numpy as np
 
-def detect_potholes(image_path):
-    img = cv2.imread(image_path)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+def detect_potholes(image_path, area_threshold=500):
+    image = cv2.imread(image_path)
+    result = {}
+    stages = {}
 
-    # Histogram equalization for better contrast
-    enhanced = cv2.equalizeHist(gray)
+    if image is None:
+        return {"potholes": [], "stages": {}, "error": "Image could not be loaded."}
 
-    # Blur + Edge detection
-    blur = cv2.GaussianBlur(enhanced, (5, 5), 0)
-    edges = cv2.Canny(blur, 50, 150)
+    original = image.copy()
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    stages["1. Grayscale"] = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
-    # Find contours
-    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    # Enhance contrast with CLAHE
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    contrast = clahe.apply(gray)
+    stages["2. CLAHE"] = cv2.cvtColor(contrast, cv2.COLOR_GRAY2BGR)
+
+    # Use a light bilateral filter to preserve edges
+    filtered = cv2.bilateralFilter(contrast, 9, 75, 75)
+
+    # Morphological closing to reduce small noise
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    closed = cv2.morphologyEx(filtered, cv2.MORPH_CLOSE, kernel)
+    stages["3. Morph Close"] = cv2.cvtColor(closed, cv2.COLOR_GRAY2BGR)
+
+    # Sharpen edges
+    sharpen_kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    sharpened = cv2.filter2D(closed, -1, sharpen_kernel)
+    stages["4. Sharpened"] = cv2.cvtColor(sharpened, cv2.COLOR_GRAY2BGR)
+
+    # Adaptive Canny edges
+    med = np.median(sharpened)
+    lower = int(max(0, 0.66 * med))
+    upper = int(min(255, 1.33 * med))
+    edges = cv2.Canny(sharpened, lower, upper)
+    stages["5. Edges"] = cv2.cvtColor(edges, cv2.COLOR_GRAY2BGR)
+
+    # Dilate to connect broken contours
+    dilated = cv2.dilate(edges, kernel, iterations=2)
+    stages["6. Dilated"] = cv2.cvtColor(dilated, cv2.COLOR_GRAY2BGR)
+
+    # Contour detection
+    contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     potholes = []
-    result_img = img.copy()
 
     for cnt in contours:
         area = cv2.contourArea(cnt)
-        if area < 600 or area > 20000:
+        if area < area_threshold:
             continue
+
+        # Shape filtering: filter out elongated lines or flat stains
+        perimeter = cv2.arcLength(cnt, True)
+        approx = cv2.approxPolyDP(cnt, 0.02 * perimeter, True)
+
+        # Convexity: potholes are usually concave
+        hull = cv2.convexHull(cnt)
+        hull_area = cv2.contourArea(hull)
+        if hull_area == 0:
+            continue
+        solidity = area / hull_area
+
+        # Heuristic filter: good solidity + few points in approx
+        if solidity < 0.5:
+            continue  # skip open or too irregular shapes
+
 
         x, y, w, h = cv2.boundingRect(cnt)
-        aspect_ratio = float(w) / h
+        roi = gray[y:y+h, x:x+w]
+        brightness = np.mean(roi)
+        darkness = 255 - brightness
+        danger_score = int(area * (darkness / 255))
 
-        if aspect_ratio < 0.3 or aspect_ratio > 3.5:
-            continue  # ignore very tall or wide shapes
-
-        mask = np.zeros_like(gray)
-        cv2.drawContours(mask, [cnt], -1, 255, -1)
-        mean_inside = cv2.mean(gray, mask=mask)[0]
-        mean_outside = cv2.mean(gray)[0]
-
-        # Only consider if it's significantly darker inside the contour
-        if mean_outside - mean_inside < 15:
+        if danger_score > 15000:
+            level = "High"
+            color = (0, 0, 255)
+        elif danger_score > 8000:
+            level = "Medium"
+            color = (0, 165, 255)
+        else:
             continue
 
+        cv2.rectangle(original, (x, y), (x + w, y + h), color, 2)
+        cv2.putText(original, level, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+
         potholes.append({
-            "x": x,
-            "y": y,
-            "w": w,
-            "h": h,
-            "area": area
+            "bbox": (x, y, w, h),
+            "area": int(area),
+            "brightness": int(brightness),
+            "danger_score": danger_score,
+            "danger_level": level,
+            "solidity": round(solidity, 2)
         })
 
-        # Color coding for visualization
-        if area > 10000:
-            color = (0, 0, 255)    # Red
-        elif area > 3000:
-            color = (255, 0, 0)    # Blue
-        else:
-            color = (0, 255, 0)    # Green
+    stages["7. Final Detection"] = original
 
-        cv2.drawContours(result_img, [cnt], -1, color, 2)
-
-    return {
-        "potholes": potholes,
-        "stages": {
-            "Masked": gray,
-            "Enhanced": enhanced,
-            "Binary": edges,
-            "Final": result_img
-        }
-    }
+    result["potholes"] = potholes
+    result["stages"] = stages
+    result["image"] = original
+    return result

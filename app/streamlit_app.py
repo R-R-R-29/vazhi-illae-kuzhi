@@ -66,8 +66,3 @@ if st.button("Generate Certificate"):
             file_name="pothole_certificate.png",
             mime="image/png"
         )
-
-
-
-
-
