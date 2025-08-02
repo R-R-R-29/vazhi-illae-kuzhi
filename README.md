@@ -55,7 +55,7 @@ For Software:
 For Software:
 # Installation
 [# Clone the repository
-git clone https://github.com/your-username/vazhi-illae-kuzhi.git
+git clone https://github.com/R-R-R-29/vazhi-illae-kuzhi.git
 cd vazhi-illae-kuzhi
 
 # (Optional) Create a virtual environment
