@@ -220,7 +220,7 @@ if st.session_state.current_page == "upload":
         
         # Display uploaded image
         st.markdown("### 🖼️ Uploaded Image")
-        st.image(temp_path, caption="📸 Road Image for Analysis", use_column_width=True)
+        st.image(temp_path, caption="📸 Road Image for Analysis", use_container_width=True)
         
         # Analysis button
         if st.button("🔍 Analyze Potholes", type="primary", use_container_width=True):
@@ -285,7 +285,7 @@ if st.session_state.current_page == "upload":
                 for i, (label, img_stage) in enumerate(stages.items()):
                     rgb_img = cv2.cvtColor(img_stage, cv2.COLOR_BGR2RGB)
                     with cols[i]:
-                        st.image(rgb_img, caption=f"**{label}**", use_column_width=True)
+                        st.image(rgb_img, caption=f"**{label}**", use_container_width=True)
                 
                 st.markdown("---")
                 
@@ -414,7 +414,7 @@ elif st.session_state.current_page == "certificate":
                 
                 # Display generated certificate
                 st.markdown("### 🎉 Your Official Pothole Certificate")
-                st.image(cert_path, caption="🚧 Official Pothole Documentation Certificate", use_column_width=True)
+                st.image(cert_path, caption="🚧 Official Pothole Documentation Certificate", use_container_width=True)
                 
                 # Download section
                 st.markdown("### 📥 Download Certificate")
