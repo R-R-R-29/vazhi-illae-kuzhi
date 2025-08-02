@@ -293,7 +293,7 @@ if st.session_state.current_page == "upload":
                 st.markdown("### 🔥 AI-Generated Pothole Roasts")
                 for i, pothole in enumerate(potholes, 1):
                     area = pothole["area"]
-                    roast = roast_pothole(area)
+                    roast = roast_pothole(pothole)
                     st.markdown(f"""
                     <div class="roast-item">
                         <strong>Pothole #{i}</strong> (Area: {area:,} px²)<br>
